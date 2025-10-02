@@ -38,64 +38,70 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ currentScore, onScoreSubmit }
 
   const getRankIcon = (index: number) => {
     switch (index) {
-      case 0: return '🥇';
-      case 1: return '🥈';
-      case 2: return '🥉';
+      case 0: return '⭐';
+      case 1: return '✨';
+      case 2: return '💫';
       default: return `${index + 1}.`;
     }
   };
 
   return (
-    <div style={{ 
-      background: '#fff', 
-      borderRadius: 12, 
-      padding: 'clamp(12px, 3vw, 16px)', 
+    <div style={{
+      background: 'linear-gradient(135deg, #1a1443 0%, #0d0221 100%)',
+      borderRadius: 12,
+      padding: 'clamp(12px, 3vw, 16px)',
       minWidth: '280px',
       maxWidth: '90vw',
       width: '100%',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+      boxShadow: '0 0 20px rgba(0, 255, 255, 0.3)',
       marginBottom: 16,
-      boxSizing: 'border-box'
+      boxSizing: 'border-box',
+      border: '2px solid #00ffff'
     }}>
-      <h3 style={{ 
-        margin: '0 0 12px 0', 
-        color: '#333',
+      <h3 style={{
+        margin: '0 0 12px 0',
+        color: '#00ffff',
         fontSize: 'clamp(16px, 4vw, 18px)',
-        textAlign: 'center'
+        textAlign: 'center',
+        fontFamily: 'monospace',
+        textShadow: '0 0 8px rgba(0, 255, 255, 0.8)'
       }}>
-        🏆 Live Leaderboard
+        LEADERBOARD
       </h3>
       <button
         onClick={() => LeaderboardService.getInstance().clearScores()}
         style={{
           width: '100%',
-          background: '#f44336',
+          background: '#ff0066',
           color: 'white',
-          border: 'none',
+          border: '2px solid #ff0066',
           padding: '6px 10px',
           borderRadius: 6,
           cursor: 'pointer',
           marginBottom: 12,
           fontSize: '12px',
-          opacity: 0.9
+          fontFamily: 'monospace',
+          fontWeight: 'bold'
         }}
         title="Remove all saved scores from this device"
       >
-        Clear Leaderboard (Local)
+        CLEAR BOARD
       </button>
       
       {isNewHighScore && currentScore > 0 && (
         <div style={{
-          background: '#ffeb3b',
-          color: '#333',
+          background: '#00ff00',
+          color: '#000',
           padding: '8px 12px',
           borderRadius: 8,
           marginBottom: 12,
           textAlign: 'center',
           fontWeight: 'bold',
-          animation: 'pulse 1s infinite'
+          fontFamily: 'monospace',
+          animation: 'pulse 1s infinite',
+          border: '2px solid #00ff00'
         }}>
-          🎉 New High Score! 🎉
+          NEW HIGH SCORE!
         </div>
       )}
 
@@ -104,17 +110,19 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ currentScore, onScoreSubmit }
           onClick={() => setShowSubmitForm(true)}
           style={{
             width: '100%',
-            background: '#4CAF50',
-            color: 'white',
-            border: 'none',
+            background: '#00ff00',
+            color: '#000',
+            border: '2px solid #00ff00',
             padding: '8px 16px',
             borderRadius: 6,
             cursor: 'pointer',
             marginBottom: 12,
-            fontSize: '14px'
+            fontSize: '14px',
+            fontFamily: 'monospace',
+            fontWeight: 'bold'
           }}
         >
-          Submit Score
+          SUBMIT SCORE
         </button>
       )}
 
@@ -129,11 +137,14 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ currentScore, onScoreSubmit }
             style={{
               width: '100%',
               padding: '8px 12px',
-              border: '2px solid #ddd',
+              border: '2px solid #00ffff',
               borderRadius: 6,
               marginBottom: 8,
               fontSize: '14px',
-              boxSizing: 'border-box'
+              boxSizing: 'border-box',
+              background: '#0a0e27',
+              color: '#00ffff',
+              fontFamily: 'monospace'
             }}
             autoFocus
           />
@@ -142,32 +153,36 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ currentScore, onScoreSubmit }
               type="submit"
               style={{
                 flex: 1,
-                background: '#4CAF50',
-                color: 'white',
-                border: 'none',
+                background: '#00ff00',
+                color: '#000',
+                border: '2px solid #00ff00',
                 padding: '8px 16px',
                 borderRadius: 6,
                 cursor: 'pointer',
-                fontSize: '14px'
+                fontSize: '14px',
+                fontFamily: 'monospace',
+                fontWeight: 'bold'
               }}
             >
-              Submit
+              SUBMIT
             </button>
             <button
               type="button"
               onClick={() => setShowSubmitForm(false)}
               style={{
                 flex: 1,
-                background: '#f44336',
-                color: 'white',
-                border: 'none',
+                background: '#ff0066',
+                color: '#fff',
+                border: '2px solid #ff0066',
                 padding: '8px 16px',
                 borderRadius: 6,
                 cursor: 'pointer',
-                fontSize: '14px'
+                fontSize: '14px',
+                fontFamily: 'monospace',
+                fontWeight: 'bold'
               }}
             >
-              Cancel
+              CANCEL
             </button>
           </div>
         </form>
@@ -175,11 +190,12 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ currentScore, onScoreSubmit }
 
       <div style={{ maxHeight: 200, overflowY: 'auto' }}>
         {scores.length === 0 ? (
-          <div style={{ 
-            textAlign: 'center', 
-            color: '#666', 
+          <div style={{
+            textAlign: 'center',
+            color: '#00ffff',
             fontStyle: 'italic',
-            padding: '20px 0'
+            padding: '20px 0',
+            fontFamily: 'monospace'
           }}>
             No scores yet. Be the first!
           </div>
@@ -192,24 +208,26 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ currentScore, onScoreSubmit }
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '6px 0',
-                borderBottom: index < scores.length - 1 ? '1px solid #eee' : 'none',
-                background: index < 3 ? '#f8f9fa' : 'transparent'
+                borderBottom: index < scores.length - 1 ? '1px solid rgba(0, 255, 255, 0.2)' : 'none',
+                background: index < 3 ? 'rgba(0, 255, 255, 0.1)' : 'transparent'
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: '16px', minWidth: 24 }}>
+                <span style={{ fontSize: '16px', minWidth: 24, fontFamily: 'monospace', color: '#ff00ff' }}>
                   {getRankIcon(index)}
                 </span>
-                <span style={{ 
+                <span style={{
                   fontWeight: index < 3 ? 'bold' : 'normal',
-                  color: index < 3 ? '#333' : '#666'
+                  color: index < 3 ? '#00ffff' : '#ffffff',
+                  fontFamily: 'monospace'
                 }}>
                   {entry.playerName}
                 </span>
               </div>
-              <span style={{ 
+              <span style={{
                 fontWeight: 'bold',
-                color: index < 3 ? '#4CAF50' : '#333'
+                color: index < 3 ? '#00ff00' : '#00ffff',
+                fontFamily: 'monospace'
               }}>
                 {entry.score}
               </span>
@@ -218,13 +236,15 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ currentScore, onScoreSubmit }
         )}
       </div>
 
-      <div style={{ 
-        textAlign: 'center', 
-        marginTop: 12, 
-        fontSize: '12px', 
-        color: '#999' 
+      <div style={{
+        textAlign: 'center',
+        marginTop: 12,
+        fontSize: '12px',
+        color: '#00ffff',
+        fontFamily: 'monospace',
+        opacity: 0.7
       }}>
-        Updates in real-time
+        UPDATES IN REAL-TIME
       </div>
     </div>
   );

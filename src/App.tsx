@@ -5,12 +5,11 @@ import LeaderboardService from './services/leaderboardService';
 
 const GAME_WIDTH = 400;
 const GAME_HEIGHT = 600;
-const GRAVITY = 0.6;
-const JUMP_FORCE = -10;
-const PIPE_WIDTH = 55;
-const PIPE_GAP = 160;
-const PIPE_SPEED = 2.5;
-const BIRD_IMAGE_SRC = '/bird.png'; // Place bird.png in public/ directory
+const GRAVITY = 0.5;
+const JUMP_FORCE = -9;
+const OBSTACLE_WIDTH = 60;
+const OBSTACLE_GAP = 180;
+const OBSTACLE_SPEED = 2;
 
 interface Player {
   x: number;
@@ -19,40 +18,40 @@ interface Player {
   size: number;
 }
 
-interface Pipe {
+interface Obstacle {
   x: number;
   topHeight: number;
   bottomY: number;
   passed: boolean;
 }
 
-interface Cloud {
+interface Star {
   x: number;
   y: number;
   size: number;
   speed: number;
+  brightness: number;
 }
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const gameLoopRef = useRef<number | null>(null);
-  const birdImageRef = useRef<HTMLImageElement | null>(null);
   const [score, setScore] = useState(0);
   const [showPopup, setShowPopup] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
-  const [birdLoaded, setBirdLoaded] = useState(false);
   const [playerName, setPlayerName] = useState('');
   const [hasSavedScore, setHasSavedScore] = useState(false);
-  const [particles, setParticles] = useState<{ x: number; y: number; vx: number; vy: number; life: number; }[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [particles, setParticles] = useState<{ x: number; y: number; vx: number; vy: number; life: number; color: string; }[]>([]);
   const [player, setPlayer] = useState<Player>({
-    x: 50,
+    x: 80,
     y: GAME_HEIGHT / 2,
     velocity: 0,
-    size: 32
+    size: 36
   });
-  const [pipes, setPipes] = useState<Pipe[]>([]);
-  const [clouds, setClouds] = useState<Cloud[]>([]);
+  const [obstacles, setObstacles] = useState<Obstacle[]>([]);
+  const [stars, setStars] = useState<Star[]>([]);
 
   const handleScoreSubmit = useCallback((playerNameInput: string, scoreInput: number) => {
     const trimmed = playerNameInput.trim();
@@ -61,54 +60,58 @@ function App() {
     service.addScore(trimmed, scoreInput);
   }, []);
 
+  const initStars = useCallback(() => {
+    const newStars: Star[] = [];
+    for (let i = 0; i < 60; i++) {
+      newStars.push({
+        x: Math.random() * GAME_WIDTH,
+        y: Math.random() * GAME_HEIGHT,
+        size: Math.random() * 2 + 1,
+        speed: Math.random() * 0.5 + 0.2,
+        brightness: Math.random()
+      });
+    }
+    setStars(newStars);
+  }, []);
+
   const jump = useCallback(() => {
     if (!gameStarted) {
       setGameStarted(true);
       setGameOver(false);
       setScore(0);
-      setPipes([]);
+      setObstacles([]);
       setPlayer(prev => ({ ...prev, y: GAME_HEIGHT / 2, velocity: 0 }));
+      initStars();
     } else if (!gameOver) {
       setPlayer(prev => ({ ...prev, velocity: JUMP_FORCE }));
-      // spawn particles on jump
       setParticles(prev => {
-        const newParticles = Array.from({ length: 8 }).map(() => ({
+        const newParticles = Array.from({ length: 10 }).map(() => ({
           x: player.x + player.size / 2,
           y: player.y + player.size,
-          vx: (Math.random() - 0.5) * 2,
+          vx: (Math.random() - 0.5) * 3,
           vy: Math.random() * 2 + 1,
-          life: 30
+          life: 25,
+          color: Math.random() > 0.5 ? '#00ffff' : '#ff00ff'
         }));
         return [...prev, ...newParticles];
       });
     } else {
-      // Restart game
       setGameStarted(false);
       setGameOver(false);
       setScore(0);
-      setPipes([]);
+      setObstacles([]);
       setPlayer(prev => ({ ...prev, y: GAME_HEIGHT / 2, velocity: 0 }));
       setPlayerName('');
       setHasSavedScore(false);
       setParticles([]);
-      setClouds([]);
+      setStars([]);
     }
-  }, [gameStarted, gameOver, player]);
+  }, [gameStarted, gameOver, player, initStars]);
 
-  // Load bird image once
   useEffect(() => {
-    const img = new Image();
-    img.onload = () => {
-      birdImageRef.current = img;
-      setBirdLoaded(true);
-    };
-    img.onerror = () => {
-      setBirdLoaded(false);
-    };
-    img.src = BIRD_IMAGE_SRC;
-  }, []);
+    initStars();
+  }, [initStars]);
 
-  // Prefill saved player name
   useEffect(() => {
     try {
       const savedName = localStorage.getItem('flappy-bird-player-name');
@@ -116,17 +119,13 @@ function App() {
     } catch {}
   }, []);
 
-  const checkCollision = (player: Player, pipes: Pipe[]): boolean => {
-    // Ground collision
+  const checkCollision = (player: Player, obstacles: Obstacle[]): boolean => {
     if (player.y + player.size >= GAME_HEIGHT) return true;
-    
-    // Ceiling collision
     if (player.y <= 0) return true;
 
-    // Pipe collision
-    for (const pipe of pipes) {
-      if (player.x + player.size > pipe.x && player.x < pipe.x + PIPE_WIDTH) {
-        if (player.y < pipe.topHeight || player.y + player.size > pipe.bottomY) {
+    for (const obstacle of obstacles) {
+      if (player.x + player.size > obstacle.x && player.x < obstacle.x + OBSTACLE_WIDTH) {
+        if (player.y < obstacle.topHeight || player.y + player.size > obstacle.bottomY) {
           return true;
         }
       }
@@ -137,24 +136,14 @@ function App() {
   const updateGame = useCallback(() => {
     if (!gameStarted || gameOver) return;
 
-    // Update clouds
-    setClouds(prevClouds => {
-      let newClouds = prevClouds.map(cloud => ({
-        ...cloud,
-        x: cloud.x - cloud.speed
-      })).filter(cloud => cloud.x + cloud.size > 0);
-
-      // Add new clouds occasionally
-      if (Math.random() < 0.02 && newClouds.length < 5) {
-        newClouds.push({
-          x: GAME_WIDTH + 50,
-          y: Math.random() * (GAME_HEIGHT * 0.6) + 20,
-          size: Math.random() * 30 + 20,
-          speed: Math.random() * 0.5 + 0.2
-        });
-      }
-
-      return newClouds;
+    setStars(prevStars => {
+      return prevStars.map(star => {
+        let newX = star.x - star.speed;
+        if (newX < -star.size) {
+          newX = GAME_WIDTH + star.size;
+        }
+        return { ...star, x: newX, brightness: (star.brightness + 0.05) % 1 };
+      });
     });
 
     setPlayer(prevPlayer => {
@@ -164,8 +153,7 @@ function App() {
         velocity: prevPlayer.velocity + GRAVITY
       };
 
-      // Check collision
-      if (checkCollision(newPlayer, pipes)) {
+      if (checkCollision(newPlayer, obstacles)) {
         setGameOver(true);
         setShowPopup(true);
         return prevPlayer;
@@ -174,34 +162,88 @@ function App() {
       return newPlayer;
     });
 
-    setPipes(prevPipes => {
-      let newPipes = prevPipes.map(pipe => ({
-        ...pipe,
-        x: pipe.x - PIPE_SPEED
-      })).filter(pipe => pipe.x + PIPE_WIDTH > 0);
+    setObstacles(prevObstacles => {
+      let newObstacles = prevObstacles.map(obstacle => ({
+        ...obstacle,
+        x: obstacle.x - OBSTACLE_SPEED
+      })).filter(obstacle => obstacle.x + OBSTACLE_WIDTH > 0);
 
-      // Add new pipe
-      if (newPipes.length === 0 || newPipes[newPipes.length - 1].x < GAME_WIDTH - 220) {
-        const topHeight = Math.random() * (GAME_HEIGHT - PIPE_GAP - 100) + 50;
-        newPipes.push({
+      if (newObstacles.length === 0 || newObstacles[newObstacles.length - 1].x < GAME_WIDTH - 250) {
+        const topHeight = Math.random() * (GAME_HEIGHT - OBSTACLE_GAP - 120) + 60;
+        newObstacles.push({
           x: GAME_WIDTH,
           topHeight,
-          bottomY: topHeight + PIPE_GAP,
+          bottomY: topHeight + OBSTACLE_GAP,
           passed: false
         });
       }
 
-      // Update score
-      newPipes.forEach(pipe => {
-        if (!pipe.passed && pipe.x + PIPE_WIDTH < player.x) {
-          pipe.passed = true;
+      newObstacles.forEach(obstacle => {
+        if (!obstacle.passed && obstacle.x + OBSTACLE_WIDTH < player.x) {
+          obstacle.passed = true;
           setScore(prev => prev + 1);
         }
       });
 
-      return newPipes;
+      return newObstacles;
     });
-  }, [gameStarted, gameOver, pipes, player.x]);
+  }, [gameStarted, gameOver, obstacles, player.x]);
+
+  const drawPixelatedUFO = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, velocity: number) => {
+    const tilt = Math.max(-15, Math.min(15, velocity * 2));
+    const px = Math.floor(x);
+    const py = Math.floor(y);
+
+    ctx.save();
+    ctx.translate(px + size / 2, py + size / 2);
+    ctx.rotate((tilt * Math.PI) / 180);
+
+    ctx.fillStyle = '#00ffff';
+    const bodyWidth = size * 0.8;
+    const bodyHeight = size * 0.4;
+    ctx.fillRect(-bodyWidth / 2, -bodyHeight / 2 - 4, bodyWidth, bodyHeight);
+
+    ctx.fillStyle = '#0099cc';
+    const baseWidth = size;
+    const baseHeight = size * 0.25;
+    ctx.fillRect(-baseWidth / 2, bodyHeight / 2 - 6, baseWidth, baseHeight);
+
+    ctx.fillStyle = '#ffff00';
+    ctx.fillRect(-size * 0.2, -bodyHeight / 2, size * 0.4, size * 0.3);
+
+    const lightColor = Date.now() % 400 < 200 ? '#ff00ff' : '#00ff00';
+    ctx.fillStyle = lightColor;
+    ctx.fillRect(-baseWidth / 2 + 4, bodyHeight / 2 + 2, 4, 4);
+    ctx.fillRect(baseWidth / 2 - 8, bodyHeight / 2 + 2, 4, 4);
+
+    if (velocity < -5) {
+      ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+      ctx.fillRect(-6, baseHeight / 2 + 4, 12, 10);
+    }
+
+    ctx.restore();
+  };
+
+  const drawPixelatedAsteroid = (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) => {
+    const px = Math.floor(x);
+    const py = Math.floor(y);
+
+    ctx.fillStyle = '#6b4f4f';
+    ctx.fillRect(px, py, width, height);
+
+    ctx.fillStyle = '#4a3535';
+    ctx.fillRect(px, py, 4, height);
+    ctx.fillRect(px + width - 4, py, 4, height);
+
+    ctx.fillStyle = '#8b6f6f';
+    for (let i = 0; i < height; i += 12) {
+      const detailX = px + (Math.floor(i / 12) % 2 === 0 ? 8 : width - 12);
+      ctx.fillRect(detailX, py + i, 4, 4);
+    }
+
+    ctx.fillStyle = '#9b7f7f';
+    ctx.fillRect(px + 4, py, width - 8, 3);
+  };
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -209,101 +251,77 @@ function App() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear canvas
+    ctx.imageSmoothingEnabled = false;
+
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-    
-    // Draw background with gradient
+
     const gradient = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
-    gradient.addColorStop(0, '#8B5FBF'); // Purple
-    gradient.addColorStop(1, '#E91E63'); // Pink
+    gradient.addColorStop(0, '#0a0e27');
+    gradient.addColorStop(0.5, '#1a1443');
+    gradient.addColorStop(1, '#0d0221');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    // Draw clouds
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-    clouds.forEach(cloud => {
-      const { x, y, size } = cloud;
-      // Draw cloud as overlapping circles
-      ctx.beginPath();
-      ctx.arc(x, y, size * 0.4, 0, Math.PI * 2);
-      ctx.arc(x + size * 0.3, y, size * 0.5, 0, Math.PI * 2);
-      ctx.arc(x + size * 0.6, y, size * 0.4, 0, Math.PI * 2);
-      ctx.arc(x + size * 0.3, y - size * 0.2, size * 0.3, 0, Math.PI * 2);
-      ctx.fill();
+    stars.forEach(star => {
+      const alpha = 0.3 + (Math.sin(star.brightness * Math.PI * 2) * 0.7);
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+      const pixelSize = Math.ceil(star.size);
+      ctx.fillRect(Math.floor(star.x), Math.floor(star.y), pixelSize, pixelSize);
     });
 
-    // Draw pipes
-    ctx.fillStyle = '#228B22';
-    pipes.forEach(pipe => {
-      // Top pipe
-      ctx.fillRect(pipe.x, 0, PIPE_WIDTH, pipe.topHeight);
-      // Bottom pipe
-      ctx.fillRect(pipe.x, pipe.bottomY, PIPE_WIDTH, GAME_HEIGHT - pipe.bottomY);
+    obstacles.forEach(obstacle => {
+      drawPixelatedAsteroid(ctx, obstacle.x, 0, OBSTACLE_WIDTH, obstacle.topHeight);
+      drawPixelatedAsteroid(ctx, obstacle.x, obstacle.bottomY, OBSTACLE_WIDTH, GAME_HEIGHT - obstacle.bottomY);
     });
 
-    // Draw player (sprite with slight rotation based on velocity)
-    const angleDeg = Math.max(-30, Math.min(45, player.velocity * 3));
-    const angleRad = (angleDeg * Math.PI) / 180;
-    const drawWidth = player.size;
-    const drawHeight = player.size;
-    const centerX = player.x + drawWidth / 2;
-    const centerY = player.y + drawHeight / 2;
+    drawPixelatedUFO(ctx, player.x, player.y, player.size, player.velocity);
 
-    if (birdLoaded && birdImageRef.current) {
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.rotate(angleRad);
-      ctx.drawImage(
-        birdImageRef.current,
-        -drawWidth / 2,
-        -drawHeight / 2,
-        drawWidth,
-        drawHeight
-      );
-      ctx.restore();
-    } else {
-      // Fallback rectangle if image not available
-      ctx.fillStyle = '#FFD700';
-      ctx.fillRect(player.x, player.y, player.size, player.size);
-    }
-
-    // Draw and update particles
     setParticles(prev => {
       const updated = prev.map(p => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, life: p.life - 1 })).filter(p => p.life > 0);
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
       updated.forEach(p => {
-        ctx.fillRect(p.x, p.y, 2, 2);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 3, 3);
       });
       return updated;
     });
 
-    // Draw score
-    ctx.fillStyle = '#fff';
-    ctx.font = '32px Arial';
+    ctx.fillStyle = '#00ffff';
+    ctx.font = 'bold 32px monospace';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.strokeText(score.toString(), 20, 50);
     ctx.fillText(score.toString(), 20, 50);
 
-    // Draw instructions
     if (!gameStarted) {
-      ctx.fillStyle = '#fff';
-      ctx.font = '20px Arial';
-      ctx.fillText('Click or Press Space to Start!', 50, GAME_HEIGHT / 2 + 50);
+      ctx.fillStyle = '#00ffff';
+      ctx.font = 'bold 18px monospace';
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.strokeText('CLICK OR PRESS SPACE', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 50);
+      ctx.fillText('CLICK OR PRESS SPACE', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 50);
+      ctx.textAlign = 'left';
     }
 
     if (gameOver) {
-      ctx.fillStyle = '#fff';
-      ctx.font = '24px Arial';
-      ctx.fillText('Game Over! Click to Restart', 50, GAME_HEIGHT / 2 + 50);
+      ctx.fillStyle = '#ff00ff';
+      ctx.font = 'bold 20px monospace';
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      ctx.strokeText('GAME OVER', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 50);
+      ctx.fillText('GAME OVER', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 50);
+      ctx.textAlign = 'left';
     }
-  }, [pipes, player, score, gameStarted, gameOver, birdLoaded, clouds]);
+  }, [obstacles, player, score, gameStarted, gameOver, stars]);
 
-  // Game loop
   useEffect(() => {
     const gameLoop = () => {
       updateGame();
       draw();
       gameLoopRef.current = requestAnimationFrame(gameLoop);
     };
-    
+
     if (gameStarted && !gameOver) {
       gameLoopRef.current = requestAnimationFrame(gameLoop);
     } else {
@@ -317,7 +335,6 @@ function App() {
     };
   }, [updateGame, draw, gameStarted, gameOver]);
 
-  // Event listeners
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
@@ -331,24 +348,27 @@ function App() {
   }, [jump]);
 
   return (
-    <div className="App" style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center', 
-      minHeight: '100vh', 
-      background: 'linear-gradient(135deg, #8B5FBF 0%, #E91E63 100%)',
+    <div className="App" style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      minHeight: '100vh',
+      background: 'linear-gradient(180deg, #0a0e27 0%, #1a1443 50%, #0d0221 100%)',
       padding: '10px',
       boxSizing: 'border-box'
     }}>
-      <h1 style={{ 
-        margin: '10px 0', 
+      <h1 style={{
+        margin: '10px 0',
         fontSize: 'clamp(24px, 5vw, 32px)',
-        color: '#333'
+        color: '#00ffff',
+        fontFamily: 'monospace',
+        textShadow: '0 0 10px rgba(0, 255, 255, 0.8), 2px 2px 0 #000',
+        letterSpacing: '2px'
       }}>
-        Flappy Bird GDC
+        SPACE UFO ADVENTURE
       </h1>
       {!gameStarted && !gameOver && (
-        <div style={{ color: '#333', marginBottom: 8, fontSize: '14px' }}>
+        <div style={{ color: '#00ffff', marginBottom: 8, fontSize: '14px', fontFamily: 'monospace', textShadow: '1px 1px 0 #000' }}>
           Press Space to start
         </div>
       )}
@@ -356,67 +376,74 @@ function App() {
         ref={canvasRef}
         width={GAME_WIDTH}
         height={GAME_HEIGHT}
-        style={{ 
-          border: '2px solid #333', 
-          background: 'linear-gradient(135deg, #8B5FBF 0%, #E91E63 100%)', 
-          marginBottom: 16, 
+        style={{
+          border: '4px solid #00ffff',
+          background: '#0a0e27',
+          marginBottom: 16,
           cursor: 'pointer',
           maxWidth: '100%',
-          height: 'auto'
+          height: 'auto',
+          imageRendering: 'pixelated',
+          boxShadow: '0 0 20px rgba(0, 255, 255, 0.5)'
         }}
         onClick={jump}
       />
-      <div style={{ 
-        marginBottom: 16, 
+      <div style={{
+        marginBottom: 16,
         fontSize: 'clamp(16px, 4vw, 20px)',
-        color: '#333',
-        fontWeight: 'bold'
+        color: '#ff00ff',
+        fontWeight: 'bold',
+        fontFamily: 'monospace',
+        textShadow: '0 0 8px rgba(255, 0, 255, 0.8), 1px 1px 0 #000'
       }}>
         Score: {score}
       </div>
-      {/* Live Leaderboard */}
-      <Leaderboard 
-        currentScore={score} 
+      <Leaderboard
+        currentScore={score}
         onScoreSubmit={handleScoreSubmit}
       />
-      {/* Popup */}
       {showPopup && (
-        <div style={{ 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          width: '100vw', 
-          height: '100vh', 
-          background: 'rgba(0,0,0,0.5)', 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(0,0,0,0.85)',
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'center',
           zIndex: 1000,
           padding: '20px',
           boxSizing: 'border-box'
         }}>
-          <div style={{ 
-            background: '#fff', 
-            padding: 'clamp(20px, 5vw, 32px)', 
-            borderRadius: 16, 
-            textAlign: 'center', 
+          <div style={{
+            background: 'linear-gradient(135deg, #1a1443 0%, #0d0221 100%)',
+            padding: 'clamp(20px, 5vw, 32px)',
+            borderRadius: 16,
+            textAlign: 'center',
             maxWidth: 'min(90vw, 400px)',
             width: '100%',
-            boxSizing: 'border-box'
+            boxSizing: 'border-box',
+            border: '3px solid #00ffff',
+            boxShadow: '0 0 30px rgba(0, 255, 255, 0.5)'
           }}>
-            <h2 style={{ 
+            <h2 style={{
               fontSize: 'clamp(20px, 5vw, 24px)',
               margin: '0 0 16px 0',
-              color: '#333'
+              color: '#ff00ff',
+              fontFamily: 'monospace',
+              textShadow: '0 0 10px rgba(255, 0, 255, 0.8)'
             }}>
               GAME OVER!
             </h2>
-            <p style={{ 
+            <p style={{
               fontSize: 'clamp(16px, 4vw, 18px)',
               margin: '8px 0',
-              color: '#666'
+              color: '#00ffff',
+              fontFamily: 'monospace'
             }}>
-              Final Score: <strong style={{ color: '#4CAF50' }}>{score}</strong>
+              Final Score: <strong style={{ color: '#00ff00' }}>{score}</strong>
             </p>
             <div style={{ margin: '12px 0 8px 0' }}>
               <input
@@ -428,10 +455,13 @@ function App() {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  border: '2px solid #eee',
+                  border: '2px solid #00ffff',
                   borderRadius: 8,
                   fontSize: 'clamp(14px, 3.5vw, 16px)',
-                  boxSizing: 'border-box'
+                  boxSizing: 'border-box',
+                  background: '#0a0e27',
+                  color: '#00ffff',
+                  fontFamily: 'monospace'
                 }}
               />
               <button
@@ -446,43 +476,49 @@ function App() {
                 }}
                 style={{
                   width: '100%',
-                  background: '#4CAF50',
-                  color: 'white',
+                  background: '#00ff00',
+                  color: '#000',
                   border: 'none',
                   padding: 'clamp(10px, 3vw, 12px)',
                   borderRadius: '8px',
                   fontSize: 'clamp(14px, 3.5vw, 16px)',
                   cursor: 'pointer',
-                  marginTop: 8
+                  marginTop: 8,
+                  fontFamily: 'monospace',
+                  fontWeight: 'bold'
                 }}
                 disabled={score <= 0 || playerName.trim().length === 0 || hasSavedScore}
               >
-                {hasSavedScore ? 'Saved!' : 'Save to Leaderboard'}
+                {hasSavedScore ? 'SAVED!' : 'SAVE TO LEADERBOARD'}
               </button>
             </div>
-            <p style={{ 
+            <p style={{
               fontSize: 'clamp(14px, 3.5vw, 16px)',
               margin: '8px 0 20px 0',
-              color: '#333'
+              color: '#00ffff',
+              fontFamily: 'monospace',
+              lineHeight: '1.5'
             }}>
-              Bored of the same old game? Think it’s too silly or too easy? Then stop just playing and start creating!<br/>
+              Bored of the same old game? Think it's too silly or too easy? Then stop just playing and start creating!<br/>
               Come pitch your wildest ideas and watch them come to life.
             </p>
-            <button 
+            <button
               onClick={() => setShowPopup(false)}
-              style={{ 
-                background: '#4CAF50', 
-                color: 'white', 
-                border: 'none', 
-                padding: 'clamp(10px, 3vw, 12px) clamp(20px, 5vw, 24px)', 
-                borderRadius: '8px', 
-                fontSize: 'clamp(14px, 3.5vw, 16px)', 
+              style={{
+                background: '#ff00ff',
+                color: '#fff',
+                border: 'none',
+                padding: 'clamp(10px, 3vw, 12px) clamp(20px, 5vw, 24px)',
+                borderRadius: '8px',
+                fontSize: 'clamp(14px, 3.5vw, 16px)',
                 cursor: 'pointer',
                 marginTop: '16px',
-                minWidth: '120px'
+                minWidth: '120px',
+                fontFamily: 'monospace',
+                fontWeight: 'bold'
               }}
             >
-              Close
+              CLOSE
             </button>
           </div>
         </div>
