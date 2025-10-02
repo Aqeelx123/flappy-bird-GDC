@@ -146,21 +146,7 @@ function App() {
       });
     });
 
-    setPlayer(prevPlayer => {
-      const newPlayer = {
-        ...prevPlayer,
-        y: prevPlayer.y + prevPlayer.velocity,
-        velocity: prevPlayer.velocity + GRAVITY
-      };
-
-      if (checkCollision(newPlayer, obstacles)) {
-        setGameOver(true);
-        setShowPopup(true);
-        return prevPlayer;
-      }
-
-      return newPlayer;
-    });
+    let currentObstacles: Obstacle[] = [];
 
     setObstacles(prevObstacles => {
       let newObstacles = prevObstacles.map(obstacle => ({
@@ -178,16 +164,34 @@ function App() {
         });
       }
 
-      newObstacles.forEach(obstacle => {
-        if (!obstacle.passed && obstacle.x + OBSTACLE_WIDTH < player.x) {
+      currentObstacles = newObstacles;
+      return newObstacles;
+    });
+
+    setPlayer(prevPlayer => {
+      const newPlayer = {
+        ...prevPlayer,
+        y: prevPlayer.y + prevPlayer.velocity,
+        velocity: prevPlayer.velocity + GRAVITY
+      };
+
+      if (checkCollision(newPlayer, currentObstacles)) {
+        setGameOver(true);
+        setShowPopup(true);
+        return prevPlayer;
+      }
+
+      // Update score
+      currentObstacles.forEach(obstacle => {
+        if (!obstacle.passed && obstacle.x + OBSTACLE_WIDTH < newPlayer.x) {
           obstacle.passed = true;
           setScore(prev => prev + 1);
         }
       });
 
-      return newObstacles;
+      return newPlayer;
     });
-  }, [gameStarted, gameOver, obstacles, player.x]);
+  }, [gameStarted, gameOver]);
 
   const drawPixelatedUFO = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, velocity: number) => {
     const tilt = Math.max(-15, Math.min(15, velocity * 2));
